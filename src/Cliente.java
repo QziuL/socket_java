@@ -1,13 +1,17 @@
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.SocketException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Scanner;
 
-public class Cliente {
-    public static void main(String[] args) {
-        final String ENDERECO_SERVIDOR = "localhost";
-        final int PORTA_SERVIDOR = 8888;
 
+class Sender implements Runnable {
+    public final static int PORT_SERVER = 8888;
+    public final static String ADDRESS_SERVER = "localhost";
+
+    public void run() {
         try (DatagramSocket socket = new DatagramSocket();
              Scanner scanner = new Scanner(System.in))
         {
@@ -17,31 +21,58 @@ public class Cliente {
                 System.out.print("Digite uma mensagem: ");
                 String mensagem = scanner.nextLine();
 
-                String dado = nome + ": " + mensagem;
+                LocalDateTime data = LocalDateTime.now();
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
+                String hora = data.format(formatter);
+
+                String dado = "[" + hora + "]" + nome + ": " + mensagem;
                 byte[] bufferEnvio = dado.getBytes();
 
-                InetAddress enderecoServidor = InetAddress.getByName(ENDERECO_SERVIDOR);
+                InetAddress enderecoServidor = InetAddress.getByName(ADDRESS_SERVER);
 
                 DatagramPacket pacoteEnvio = new DatagramPacket(
                         bufferEnvio,
                         bufferEnvio.length,
                         enderecoServidor,
-                        PORTA_SERVIDOR
+                        PORT_SERVER
                 );
 
                 socket.send(pacoteEnvio);
             }
-
-            // Receber resposta
-//            byte[] bufferReceber = new byte[1024];
-//            DatagramPacket pacoteResposta = new DatagramPacket(bufferReceber, bufferReceber.length);
-//            socket.receive(pacoteResposta);
-//
-//            String resposta = new String(pacoteResposta.getData(), 0, pacoteResposta.getLength());
-//            System.out.println("Resposta do servidor: " + resposta);
-
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 }
+
+class Receiver implements Runnable {
+    public static final byte[] buffer = new byte[1024];
+
+    public void run() {
+        try(DatagramSocket socket = new DatagramSocket()){
+            while (true) {
+                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                socket.receive(packet);
+
+                String received = new String(packet.getData(), 0, packet.getLength());
+                System.out.println(received);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+public class Cliente {
+    public static void main(String[] args) throws InterruptedException {
+        Thread senderThread = new Thread(new Sender());
+        Thread receiverThread = new Thread(new Receiver());
+
+        senderThread.start();
+        receiverThread.start();
+
+        senderThread.join();
+        receiverThread.join();
+    }
+}
+
